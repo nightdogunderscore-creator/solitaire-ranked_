@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Solitaire</title>
+<style>
+body {
+    margin: 0;
+    background: #0b6623;
+    font-family: Arial, sans-serif;
+    color: white;
+    user-select: none;
+}
+
+header {
+    text-align: center;
+    padding: 10px;
+    font-size: 28px;
+    font-weight: bold;
+}
+
+#game {
+    padding: 20px;
+}
+
+.row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 40px;
+}
+
+.pile, .foundation, .stock, .waste {
+    width: 90px;
+    height: 120px;
+    border: 2px dashed rgba(255,255,255,0.5);
+    border-radius: 8px;
+    position: relative;
+}
+
+.card {
+    width: 90px;
+    height: 120px;
+    border-radius: 8px;
+    background: white;
+    color: black;
+    position: absolute;
+    cursor: grab;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    border: 1px solid black;
+}
+
+.red { color: red; }
+
+.face-down {
+    background: navy;
+    color: navy;
+    cursor: pointer;
+}
+
+.tableau {
+    display: flex;
+    justify-content: space-between;
+}
+
+.tableau .pile {
+    height: 400px;
+}
+
+button {
+    padding: 8px 16px;
+    font-size: 16px;
+    cursor: pointer;
+}
+</style>
+</head>
+<body>
+
+<header>🃏 Solitaire</header>
+<div id="game">
+    <div class="row">
+        <div style="display:flex; gap:20px;">
+            <div id="stock" class="stock pile"></div>
+            <div id="waste" class="waste pile"></div>
+        </div>
+        <div style="display:flex; gap:20px;">
+            <div class="foundation pile" data-suit="♠"></div>
+            <div class="foundation pile" data-suit="♥"></div>
+            <div class="foundation pile" data-suit="♦"></div>
+            <div class="foundation pile" data-suit="♣"></div>
+        </div>
+    </div>
+
+    <div class="tableau" id="tableau"></div>
+
+    <br>
+    <button onclick="initGame()">Restart</button>
+</div>
+
+<script>
+const suits = ["♠","♥","♦","♣"];
+const values = ["A","2","3","4","5","6","7","8","9","10","J","Q","K"];
+
+let deck = [];
+let stock = [];
+let waste = [];
+let tableau = [[],[],[],[],[],[],[]];
+let foundations = { "♠":[], "♥":[], "♦":[], "♣":[] };
+
+function createDeck() {
+    deck = [];
+    for (let suit of suits) {
+        for (let i = 0; i < values.length; i++) {
+            deck.push({
+                suit,
+                value: values[i],
+                rank: i + 1,
+                faceUp: false
+            });
+        }
+    }
+}
+
+function shuffle(array) {
+    for (let i = array.length - 1; i > 0; i--) {
+        let j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+    }
+}
+
+function initGame() {
+    createDeck();
+    shuffle(deck);
+    stock = [];
+    waste = [];
+    tableau = [[],[],[],[],[],[],[]];
+    foundations = { "♠":[], "♥":[], "♦":[], "♣":[] };
+
+    // Deal tableau
+    for (let i = 0; i < 7; i++) {
+        for (let j = 0; j <= i; j++) {
+            let card = deck.pop();
+            if (j === i) card.faceUp = true;
+            tableau[i].push(card);
+        }
+    }
+
+    stock = deck;
+    render();
+}
+
+function render() {
+    document.getElementById("stock").innerHTML = "";
+    document.getElementById("waste").innerHTML = "";
+    document.getElementById("tableau").innerHTML = "";
+
+    // Stock
+    if (stock.length > 0) {
+        let card = document.createElement("div");
+        card.className = "card face-down";
+        card.onclick = drawCard;
+        document.getElementById("stock").appendChild(card);
+    }
+
+    // Waste
+    if (waste.length > 0) {
+        let cardData = waste[waste.length - 1];
+        let card = createCardElement(cardData);
+        document.getElementById("waste").appendChild(card);
+    }
+
+    // Foundations
+    document.querySelectorAll(".foundation").forEach(f => {
+        f.innerHTML = "";
+        let suit = f.dataset.suit;
+        if (foundations[suit].length > 0) {
+            let cardData = foundations[suit][foundations[suit].length - 1];
+            f.appendChild(createCardElement(cardData));
+        }
+        f.ondragover = e => e.preventDefault();
+        f.ondrop = e => dropCard(e, suit, "foundation");
+    });
+
+    // Tableau
+    for (let i = 0; i < 7; i++) {
+        let pile = document.createElement("div");
+        pile.className = "pile";
+        pile.ondragover = e => e.preventDefault();
+        pile.ondrop = e => dropCard(e, i, "tableau");
+
+        tableau[i].forEach((cardData, index) => {
+            let card = createCardElement(cardData);
+            card.style.top = (index * 25) + "px";
+            pile.appendChild(card);
+        });
+
+        document.getElementById("tableau").appendChild(pile);
+    }
+}
+
+function createCardElement(cardData) {
+    let card = document.createElement("div");
+    card.className = "card";
+    card.draggable = cardData.faceUp;
+
+    if (!cardData.faceUp) {
+        card.classList.add("face-down");
+        card.onclick = () => {
+            cardData.faceUp = true;
+            render();
+        };
+    } else {
+        card.innerHTML = cardData.value + cardData.suit;
+        if (cardData.suit === "♥" || cardData.suit === "♦") {
+            card.classList.add("red");
+        }
+        card.ondragstart = e => {
+            e.dataTransfer.setData("text/plain", JSON.stringify(cardData));
+        };
+    }
+
+    return card;
+}
+
+function drawCard() {
+    if (stock.length === 0) {
+        stock = waste.reverse();
+        waste = [];
+    } else {
+        let card = stock.pop();
+        card.faceUp = true;
+        waste.push(card);
+    }
+    render();
+}
+
+function dropCard(e, target, type) {
+    let cardData = JSON.parse(e.dataTransfer.getData("text/plain"));
+
+    if (type === "foundation") {
+        let pile = foundations[target];
+        if (
+            (pile.length === 0 && cardData.rank === 1) ||
+            (pile.length > 0 &&
+             pile[pile.length - 1].rank + 1 === cardData.rank &&
+             pile[pile.length - 1].suit === cardData.suit)
+        ) {
+            removeCard(cardData);
+            pile.push(cardData);
+        }
+    }
+
+    if (type === "tableau") {
+        let pile = tableau[target];
+        if (
+            (pile.length === 0 && cardData.rank === 13) ||
+            (pile.length > 0 &&
+             pile[pile.length - 1].rank === cardData.rank + 1 &&
+             isOppositeColor(pile[pile.length - 1], cardData))
+        ) {
+            removeCard(cardData);
+            pile.push(cardData);
+        }
+    }
+
+    render();
+}
+
+function isOppositeColor(card1, card2) {
+    const red = ["♥","♦"];
+    return red.includes(card1.suit) !== red.includes(card2.suit);
+}
+
+function removeCard(cardData) {
+    waste = waste.filter(c => c !== cardData);
+    tableau.forEach(pile => {
+        let index = pile.indexOf(cardData);
+        if (index !== -1) {
+            pile.splice(index, 1);
+            if (pile.length > 0 && !pile[pile.length - 1].faceUp) {
+                pile[pile.length - 1].faceUp = true;
+            }
+        }
+    });
+}
+
+initGame();
+</script>
+
+</body>
+</html>
